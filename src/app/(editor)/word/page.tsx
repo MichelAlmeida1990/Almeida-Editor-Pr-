@@ -21,6 +21,7 @@ import { toast } from "sonner";
 
 import { Ribbon } from "@/components/editor/Ribbon";
 import { StatusBar } from "@/components/editor/StatusBar";
+import { exportEditorContent } from "@/lib/exporters";
 import { Card, CardContent } from "@/components/ui/card";
 
 const AUTOSAVE_KEY = "almeida-editor-word-draft";
@@ -122,7 +123,12 @@ export default function WordEditor() {
   return (
     <Card className="border border-border/40 bg-black/30 shadow-inner shadow-primary/10 backdrop-blur-xl">
       <CardContent className="space-y-4 p-0">
-        <Ribbon editor={editor} />
+        <Ribbon
+          editor={editor}
+          onExport={async (format) => {
+            await exportEditorContent(editor, format);
+          }}
+        />
         <section
           className="bg-slate-100/80 px-6 pb-10 pt-6"
           role="region"

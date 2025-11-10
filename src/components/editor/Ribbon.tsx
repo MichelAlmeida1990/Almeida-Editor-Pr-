@@ -11,6 +11,10 @@ import {
   Clipboard,
   ClipboardPaste,
   Eraser,
+  File as FileIcon,
+  FileText as FileTextIcon,
+  ChevronDown,
+  ChevronUp,
   Image as ImageIcon,
   Italic,
   LinkIcon,
@@ -27,8 +31,11 @@ import {
 
 import { cn } from "@/lib/utils";
 
+type ExportFormat = "html" | "markdown";
+
 type RibbonProps = {
   editor: Editor;
+  onExport?: (format: ExportFormat) => Promise<void> | void;
 };
 
 const tabs = [
@@ -40,7 +47,7 @@ const tabs = [
   { id: "exibir", label: "Exibir" },
 ];
 
-export function Ribbon({ editor }: RibbonProps) {
+export function Ribbon({ editor, onExport }: RibbonProps) {
   const [activeTab, setActiveTab] = useState<string>("inicio");
   const [activeState, setActiveState] = useState({
     bold: false,
@@ -57,6 +64,7 @@ export function Ribbon({ editor }: RibbonProps) {
     link: false,
     table: false,
   });
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     if (!editor) return;
@@ -98,24 +106,48 @@ export function Ribbon({ editor }: RibbonProps) {
 
   return (
     <div className="rounded-t-xl border border-border/40 bg-black/60 shadow-inner shadow-primary/20">
-      <div className="flex border-b border-border/40 bg-black/80 px-2 text-sm">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              "relative rounded-t-md px-4 py-2 font-medium tracking-wide text-muted-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-              activeTab === tab.id &&
-                "bg-primary/15 text-primary shadow-[0_-2px_0_0_rgba(0,175,238,0.5)]"
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex items-center justify-between border-b border-border/40 bg-black/80 px-2 text-sm">
+        <div className="flex">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setActiveTab(tab.id);
+                setIsCollapsed(false);
+              }}
+              className={cn(
+                "relative rounded-t-md px-4 py-2 font-medium tracking-wide text-muted-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                activeTab === tab.id &&
+                  "bg-primary/15 text-primary shadow-[0_-2px_0_0_rgba(0,175,238,0.5)]"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="flex items-center gap-1 rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          onClick={() => setIsCollapsed((value) => !value)}
+          aria-expanded={!isCollapsed}
+        >
+          {isCollapsed ? (
+            <>
+              <ChevronDown className="h-4 w-4" />
+              Mostrar opções
+            </>
+          ) : (
+            <>
+              <ChevronUp className="h-4 w-4" />
+              Recolher faixa
+            </>
+          )}
+        </button>
       </div>
 
-      <div className="grid gap-4 px-4 py-3">
+      {!isCollapsed ? (
+        <div className="grid gap-4 px-4 py-3">
         {activeTab === "inicio" ? (
           <div className="flex flex-wrap items-start gap-6">
             <RibbonGroup title="Área de Transferência">
@@ -274,6 +306,21 @@ export function Ribbon({ editor }: RibbonProps) {
               />
             </RibbonGroup>
 
+            <RibbonGroup title="Exportar">
+              <RibbonButton
+                icon={FileIcon}
+                label="HTML"
+                tooltip="Exportar como HTML"
+                onClick={() => onExport?.("html")}
+              />
+              <RibbonButton
+                icon={FileTextIcon}
+                label="Markdown"
+                tooltip="Exportar como Markdown"
+                onClick={() => onExport?.("markdown")}
+              />
+            </RibbonGroup>
+
             <RibbonGroup title="Edição">
               <RibbonButton
                 icon={Undo}
@@ -355,7 +402,8 @@ export function Ribbon({ editor }: RibbonProps) {
             ]}
           />
         ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
