@@ -415,7 +415,7 @@ export default function WordEditor() {
       if (!html) return;
       window.localStorage.removeItem(IMPORT_STORAGE_KEY);
 
-      editor.commands.setContent(html, false, {
+      editor.commands.setContent(html, {
         preserveWhitespace: "full",
       });
       toast.success("Conteúdo importado do PDF.");
@@ -425,7 +425,7 @@ export default function WordEditor() {
       const html = window.localStorage.getItem(IMPORT_STORAGE_KEY);
       if (!html) return;
       window.localStorage.removeItem(IMPORT_STORAGE_KEY);
-      editor.commands.setContent(html, false, {
+      editor.commands.setContent(html, {
         preserveWhitespace: "full",
       });
       toast.success("Conteúdo importado do PDF.");
