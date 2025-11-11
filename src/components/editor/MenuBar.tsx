@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Editor } from "@tiptap/core";
+import type { Level } from "@tiptap/extension-heading";
 import {
   AlignCenter,
   AlignJustify,
@@ -24,6 +25,7 @@ import {
   Underline,
   Undo,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -38,21 +40,26 @@ type MenuBarProps = {
   editor: Editor;
 };
 
-const headings = [
+const headings: Array<{
+  level: Level;
+  label: string;
+  icon: LucideIcon;
+  description: string;
+}> = [
   {
-    level: 1,
+    level: 1 as Level,
     label: "Título 1",
     icon: Heading1,
     description: "Utilize para títulos principais do documento",
   },
   {
-    level: 2,
+    level: 2 as Level,
     label: "Título 2",
     icon: Heading2,
     description: "Ideal para subtítulos ou seções importantes",
   },
   {
-    level: 3,
+    level: 3 as Level,
     label: "Título 3",
     icon: Heading3,
     description: "Bom para marcar subseções ou tópicos específicos",
