@@ -28,6 +28,7 @@ const AUTOSAVE_KEY = "almeida-editor-word-draft";
 
 export default function WordEditor() {
   const lastToastRef = useRef(0);
+  const editorContainerRef = useRef<HTMLDivElement | null>(null);
 
   const starterContent = useMemo(
     () => `
@@ -45,6 +46,7 @@ export default function WordEditor() {
             depth: 500,
           },
           link: false,
+          underline: false,
           orderedList: false,
           bulletList: false,
         }),
@@ -126,19 +128,26 @@ export default function WordEditor() {
         <Ribbon
           editor={editor}
           onExport={async (format) => {
-            await exportEditorContent(editor, format);
+            await exportEditorContent(editor, format, {
+              container: editorContainerRef.current,
+            });
           }}
         />
         <section
-          className="bg-slate-100/80 px-6 pb-10 pt-6"
+          className="bg-slate-100/80 px-4 pb-12 pt-8"
           role="region"
           aria-label="Área de edição do documento"
         >
-          <div className="mx-auto w-full max-w-[880px] rounded-2xl border border-border/30 bg-white shadow-2xl shadow-primary/15">
-            <EditorContent
-              editor={editor}
-              className="prose prose-slate mx-auto min-h-[920px] max-w-[780px] px-12 pb-16 pt-14 text-slate-900 outline-none [counter-reset:page] print:max-w-none print:p-12"
-            />
+          <div className="mx-auto flex w-full max-w-6xl justify-center">
+            <div
+              ref={editorContainerRef}
+              className="relative w-full max-w-[820px] rounded-2xl border border-border/30 bg-white shadow-2xl shadow-primary/15"
+            >
+              <EditorContent
+                editor={editor}
+                className="prose prose-slate mx-auto min-h-[880px] w-full max-w-[720px] px-12 pb-16 pt-14 text-slate-900 outline-none print:max-w-none print:p-12"
+              />
+            </div>
           </div>
         </section>
         <StatusBar editor={editor} />

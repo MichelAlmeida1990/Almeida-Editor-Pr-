@@ -1,24 +1,59 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import type { ComponentType } from "react";
 import dynamic from "next/dynamic";
 import { pdfjs } from "react-pdf";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { FileDown, FileUp, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  FileDown,
+  FileUp,
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
+const PDF_WORKER_SRC = "/pdf.worker.mjs";
+
+type PageAlignment = "left" | "center" | "right";
+
+const ensurePdfWorkerConfigured = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const resolvedSrc = new URL(PDF_WORKER_SRC, window.location.origin).toString();
+
+  if (pdfjs.GlobalWorkerOptions.workerSrc !== resolvedSrc) {
+    pdfjs.GlobalWorkerOptions.workerSrc = resolvedSrc;
+  }
+};
+
 const Document = dynamic(
-  () => import("react-pdf").then((mod) => mod.Document),
+  async () => {
+    ensurePdfWorkerConfigured();
+    const mod = await import("react-pdf");
+    return mod.Document;
+  },
   { ssr: false }
 );
 
 const Page = dynamic(
-  () => import("react-pdf").then((mod) => mod.Page),
+  async () => {
+    ensurePdfWorkerConfigured();
+    const mod = await import("react-pdf");
+    return mod.Page;
+  },
   { ssr: false }
 );
 
@@ -31,16 +66,14 @@ export default function PdfEditor() {
   const [fileName, setFileName] = useState<string>("sem nome.pdf");
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1.2);
+  const [pageAlignment, setPageAlignment] = useState<PageAlignment>("center");
 
-  useEffect(() => {
-    import("pdfjs-dist/build/pdf.worker.min.mjs?url")
-      .then((worker) => {
-        pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-      })
-      .catch((error) => {
-        console.error("Falha ao carregar worker do PDF.js", error);
-        toast.error("Não foi possível inicializar o visualizador de PDF.");
-      });
+  const workerSrc = useMemo(() => {
+    if (typeof window === "undefined") {
+      return PDF_WORKER_SRC;
+    }
+
+    return new URL(PDF_WORKER_SRC, window.location.origin).toString();
   }, []);
 
   const onFileChange = useCallback(
@@ -57,6 +90,7 @@ export default function PdfEditor() {
       const reader = new FileReader();
       reader.onload = () => {
         setFile(reader.result as string);
+        setPageAlignment("center");
         toast.success("PDF carregado com sucesso!");
       };
       reader.onerror = () =>
@@ -74,12 +108,24 @@ export default function PdfEditor() {
     setFile(null);
     setNumPages(0);
     setFileName("sem nome.pdf");
+    setPageAlignment("center");
   };
 
   const increaseScale = () => setScale((value) => Math.min(value + 0.1, 2));
   const decreaseScale = () => setScale((value) => Math.max(value - 0.1, 0.6));
 
   const hasFile = useMemo(() => Boolean(file), [file]);
+
+  const documentAlignmentClass = useMemo(() => {
+    switch (pageAlignment) {
+      case "left":
+        return "items-start";
+      case "right":
+        return "items-end";
+      default:
+        return "items-center";
+    }
+  }, [pageAlignment]);
 
   return (
     <Card className="border border-border/40 bg-black/40 backdrop-blur-xl">
@@ -109,6 +155,30 @@ export default function PdfEditor() {
             <FileDown className="size-4" />
             Editar campos
           </Button>
+
+          <div className="flex items-center gap-1 rounded-lg border border-border/30 bg-black/20 px-1 py-1">
+            <AlignmentButton
+              icon={AlignLeft}
+              label="Alinhar à esquerda"
+              isActive={pageAlignment === "left"}
+              disabled={!hasFile}
+              onClick={() => setPageAlignment("left")}
+            />
+            <AlignmentButton
+              icon={AlignCenter}
+              label="Centralizar página"
+              isActive={pageAlignment === "center"}
+              disabled={!hasFile}
+              onClick={() => setPageAlignment("center")}
+            />
+            <AlignmentButton
+              icon={AlignRight}
+              label="Alinhar à direita"
+              isActive={pageAlignment === "right"}
+              disabled={!hasFile}
+              onClick={() => setPageAlignment("right")}
+            />
+          </div>
 
           <Button
             type="button"
@@ -171,7 +241,9 @@ export default function PdfEditor() {
               </header>
               <div className="flex flex-col gap-10">
                 <Document
+                  options={{ workerSrc }}
                   file={file}
+                  className={cn("flex flex-col gap-10", documentAlignmentClass)}
                   loading={
                     <div className="flex min-h-[300px] items-center justify-center text-sm text-muted-foreground">
                       Renderizando PDF...
@@ -185,7 +257,7 @@ export default function PdfEditor() {
                   {Array.from(new Array(numPages), (_, index) => (
                     <Page
                       key={`page-${index + 1}`}
-                      className="mx-auto rounded-lg border border-border/40 bg-white shadow-xl shadow-primary/10"
+                      className="rounded-lg border border-border/40 bg-white shadow-xl shadow-primary/10"
                       pageNumber={index + 1}
                       scale={scale}
                       renderAnnotationLayer
@@ -199,6 +271,37 @@ export default function PdfEditor() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+type AlignmentButtonProps = {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  isActive: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+};
+
+function AlignmentButton({
+  icon: Icon,
+  label,
+  isActive,
+  disabled,
+  onClick,
+}: AlignmentButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      className={cn(
+        "flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50",
+        isActive && "bg-primary/20 text-primary"
+      )}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
   );
 }
 

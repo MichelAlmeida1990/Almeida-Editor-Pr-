@@ -2,12 +2,19 @@
 
 import type { Editor } from "@tiptap/core";
 import { saveAs } from "file-saver";
+import { toPng } from "html-to-image";
+import { PDFDocument } from "pdf-lib";
 
-export type ExportFormat = "html" | "markdown";
+export type ExportFormat = "html" | "markdown" | "pdf";
+
+type ExportOptions = {
+  container?: HTMLElement | null;
+};
 
 export async function exportEditorContent(
   editor: Editor,
-  format: ExportFormat
+  format: ExportFormat,
+  options: ExportOptions = {}
 ) {
   if (format === "html") {
     const html = buildHTMLDocument(editor);
@@ -20,6 +27,39 @@ export async function exportEditorContent(
     const markdown = convertToMarkdown(editor);
     const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
     saveAs(blob, createFilename("md"));
+    return;
+  }
+
+  if (format === "pdf") {
+    if (!options.container) {
+      throw new Error("Container do editor não informado para exportação em PDF.");
+    }
+
+    const dataUrl = await toPng(options.container, {
+      cacheBust: true,
+      pixelRatio: 2,
+    });
+
+    const pdfDoc = await PDFDocument.create();
+    const pngImage = await pdfDoc.embedPng(dataUrl);
+    const page = pdfDoc.addPage([595.28, 841.89]);
+
+    const scale = Math.min(
+      page.getWidth() / pngImage.width,
+      page.getHeight() / pngImage.height
+    );
+    const pngDims = pngImage.scale(scale);
+
+    page.drawImage(pngImage, {
+      x: (page.getWidth() - pngDims.width) / 2,
+      y: (page.getHeight() - pngDims.height) / 2,
+      width: pngDims.width,
+      height: pngDims.height,
+    });
+
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    saveAs(blob, createFilename("pdf"));
     return;
   }
 
@@ -77,15 +117,3 @@ function buildHTMLDocument(editor: Editor) {
   </body>
 </html>`;
 }
-
-function convertToMarkdown(editor: Editor) {
-  const text = editor.getText();
-  if (!text) return "";
-  return text;
-}
-
-function createFilename(extension: string) {
-  const iso = new Date().toISOString().replace(/[:.]/g, "-");
-  return `almeida-editor-${iso}.${extension}`;
-}
-

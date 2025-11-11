@@ -27,11 +27,12 @@ import {
   Table as TableIcon,
   Underline,
   Undo,
+  FileDown,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-type ExportFormat = "html" | "markdown";
+type ExportFormat = "html" | "markdown" | "pdf";
 
 type RibbonProps = {
   editor: Editor;
@@ -318,6 +319,12 @@ export function Ribbon({ editor, onExport }: RibbonProps) {
                 label="Markdown"
                 tooltip="Exportar como Markdown"
                 onClick={() => onExport?.("markdown")}
+              />
+              <RibbonButton
+                icon={FileDown}
+                label="PDF"
+                tooltip="Exportar como PDF"
+                onClick={() => onExport?.("pdf")}
               />
             </RibbonGroup>
 
