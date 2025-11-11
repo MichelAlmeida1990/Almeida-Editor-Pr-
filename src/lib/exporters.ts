@@ -58,7 +58,9 @@ export async function exportEditorContent(
     });
 
     const pdfBytes = await pdfDoc.save();
-    const blob = new Blob([pdfBytes.buffer.slice(0)], {
+    const arrayBuffer = new ArrayBuffer(pdfBytes.length);
+    new Uint8Array(arrayBuffer).set(pdfBytes);
+    const blob = new Blob([arrayBuffer], {
       type: "application/pdf",
     });
     saveAs(blob, createFilename("pdf"));
