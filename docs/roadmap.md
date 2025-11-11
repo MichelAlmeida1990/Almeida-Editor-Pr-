@@ -13,7 +13,8 @@
 - [ ] Módulo PDF aprimorado  
   - [ ] Anotações com `pdf-lib` (markup, destaque, comentários)  
   - [ ] Campos editáveis e templates com `@pdfme/ui`  
-  - [ ] Exportação/mesclagem de PDFs e assinaturas
+  - [ ] Exportação/mesclagem de PDFs e assinaturas  
+  - [ ] OCR opcional (Tesseract/local) para PDFs baseados em imagem
 
 - [x] Layout & UX (Fase 1)  
   - [x] Ribbon estilo Word (grupos Área de Transferência, Fonte, Parágrafo, Inserir, Edição)  

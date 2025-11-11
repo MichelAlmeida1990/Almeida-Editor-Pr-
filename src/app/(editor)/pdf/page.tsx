@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import type { ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  ComponentType,
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+} from "react";
 import dynamic from "next/dynamic";
 import { pdfjs } from "react-pdf";
 import { Button } from "@/components/ui/button";
@@ -17,15 +21,27 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { extractPdfToHtml } from "@/lib/pdf-to-html";
 
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
 const PDF_WORKER_SRC = "/pdf.worker.mjs";
+const IMPORT_EVENT = "almeida:import";
+const IMPORT_STORAGE_KEY = "almeida-editor-word-import";
 
 type PageAlignment = "left" | "center" | "right";
+
+type TextField = {
+  id: string;
+  page: number;
+  x: number;
+  y: number;
+  text: string;
+};
 
 const ensurePdfWorkerConfigured = () => {
   if (typeof window === "undefined") {
@@ -67,6 +83,10 @@ export default function PdfEditor() {
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1.2);
   const [pageAlignment, setPageAlignment] = useState<PageAlignment>("center");
+  const [isEditingFields, setIsEditingFields] = useState(false);
+  const [textFields, setTextFields] = useState<TextField[]>([]);
+  const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
 
   const workerSrc = useMemo(() => {
     if (typeof window === "undefined") {
@@ -75,6 +95,8 @@ export default function PdfEditor() {
 
     return new URL(PDF_WORKER_SRC, window.location.origin).toString();
   }, []);
+
+  const documentOptions = useMemo(() => ({ workerSrc }), [workerSrc]);
 
   const onFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,6 +113,9 @@ export default function PdfEditor() {
       reader.onload = () => {
         setFile(reader.result as string);
         setPageAlignment("center");
+        setIsEditingFields(false);
+        setTextFields([]);
+        setActiveFieldId(null);
         toast.success("PDF carregado com sucesso!");
       };
       reader.onerror = () =>
@@ -109,6 +134,9 @@ export default function PdfEditor() {
     setNumPages(0);
     setFileName("sem nome.pdf");
     setPageAlignment("center");
+    setIsEditingFields(false);
+    setTextFields([]);
+    setActiveFieldId(null);
   };
 
   const increaseScale = () => setScale((value) => Math.min(value + 0.1, 2));
@@ -126,6 +154,90 @@ export default function PdfEditor() {
         return "items-center";
     }
   }, [pageAlignment]);
+
+  const handleToggleEditFields = () => {
+    if (!hasFile) {
+      toast.info("Carregue um PDF para habilitar a edição de campos.");
+      return;
+    }
+
+    setIsEditingFields((prev) => {
+      const next = !prev;
+      if (!next) {
+        setActiveFieldId(null);
+      }
+      toast[next ? "success" : "info"](
+        next ? "Modo de edição de campos ativado." : "Modo de edição desativado."
+      );
+      return next;
+    });
+  };
+
+  const handleConvertToWord = async () => {
+    if (!file) {
+      toast.info("Carregue um PDF antes de converter.");
+      return;
+    }
+
+    try {
+      setIsConverting(true);
+      const html = await extractPdfToHtml(file);
+      window.localStorage.setItem(IMPORT_STORAGE_KEY, html);
+      window.dispatchEvent(
+        new CustomEvent(IMPORT_EVENT, {
+          detail: { html },
+        })
+      );
+      window.location.hash = "word";
+      toast.success("PDF convertido e enviado para o editor Word.");
+    } catch (error) {
+      console.error("Falha ao converter PDF:", error);
+      toast.error("Não foi possível converter este PDF.");
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
+  const handlePageClick = (pageNumber: number) => (
+    event: ReactMouseEvent<HTMLDivElement>
+  ) => {
+    if (!isEditingFields) return;
+
+    const target = event.currentTarget;
+    const rect = target.getBoundingClientRect();
+
+    const xPercent = ((event.clientX - rect.left) / rect.width) * 100;
+    const yPercent = ((event.clientY - rect.top) / rect.height) * 100;
+
+    const newField: TextField = {
+      id: createFieldId(),
+      page: pageNumber,
+      x: xPercent,
+      y: yPercent,
+      text: "",
+    };
+
+    setTextFields((fields) => [...fields, newField]);
+    setActiveFieldId(newField.id);
+  };
+
+  const handleFieldTextChange = (id: string, text: string) => {
+    setTextFields((fields) =>
+      fields.map((field) =>
+        field.id === id
+          ? {
+              ...field,
+              text,
+            }
+          : field
+      )
+    );
+  };
+
+  const handleFieldRemove = (id: string) => {
+    setTextFields((fields) => fields.filter((field) => field.id !== id));
+    setActiveFieldId((current) => (current === id ? null : current));
+  };
 
   return (
     <Card className="border border-border/40 bg-black/40 backdrop-blur-xl">
@@ -145,12 +257,11 @@ export default function PdfEditor() {
           <Button
             type="button"
             variant="ghost"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() =>
-              toast.info(
-                "Edição direta virá com o módulo pdf-lib (em desenvolvimento)."
-              )
-            }
+            className={cn(
+              "text-muted-foreground hover:text-foreground",
+              isEditingFields && "text-primary"
+            )}
+            onClick={handleToggleEditFields}
           >
             <FileDown className="size-4" />
             Editar campos
@@ -189,6 +300,20 @@ export default function PdfEditor() {
           >
             <RotateCcw className="size-4" />
             Limpar
+          </Button>
+
+          <Button
+            type="button"
+            className="bg-primary text-[#031f5f] hover:bg-primary/90"
+            disabled={!hasFile || isConverting}
+            onClick={handleConvertToWord}
+          >
+            {isConverting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileDown className="mr-2 h-4 w-4" />
+            )}
+            Converter para Word
           </Button>
 
           <div className="ml-auto flex items-center gap-2">
@@ -241,7 +366,7 @@ export default function PdfEditor() {
               </header>
               <div className="flex flex-col gap-10">
                 <Document
-                  options={{ workerSrc }}
+                  options={documentOptions}
                   file={file}
                   className={cn("flex flex-col gap-10", documentAlignmentClass)}
                   loading={
@@ -255,14 +380,39 @@ export default function PdfEditor() {
                   }
                 >
                   {Array.from(new Array(numPages), (_, index) => (
-                    <Page
+                    <div
                       key={`page-${index + 1}`}
-                      className="rounded-lg border border-border/40 bg-white shadow-xl shadow-primary/10"
-                      pageNumber={index + 1}
-                      scale={scale}
-                      renderAnnotationLayer
-                      renderTextLayer
-                    />
+                      className="relative"
+                      onClick={handlePageClick(index + 1)}
+                    >
+                      <Page
+                        className="rounded-lg border border-border/40 bg-white shadow-xl shadow-primary/10"
+                        pageNumber={index + 1}
+                        scale={scale}
+                        renderAnnotationLayer
+                        renderTextLayer
+                      />
+                      {textFields
+                        .filter((field) => field.page === index + 1)
+                        .map((field) => (
+                          <TextFieldMarker
+                            key={field.id}
+                            field={field}
+                            isEditing={isEditingFields}
+                            isActive={activeFieldId === field.id}
+                            onFocus={() => setActiveFieldId(field.id)}
+                            onBlur={() =>
+                              setActiveFieldId((current) =>
+                                current === field.id ? null : current
+                              )
+                            }
+                            onChange={(value) =>
+                              handleFieldTextChange(field.id, value)
+                            }
+                            onRemove={() => handleFieldRemove(field.id)}
+                          />
+                        ))}
+                    </div>
                   ))}
                 </Document>
               </div>
@@ -303,5 +453,143 @@ function AlignmentButton({
       <Icon className="h-4 w-4" />
     </button>
   );
+}
+
+type TextFieldMarkerProps = {
+  field: TextField;
+  isEditing: boolean;
+  isActive: boolean;
+  onFocus: () => void;
+  onBlur: () => void;
+  onChange: (value: string) => void;
+  onRemove: () => void;
+};
+
+function TextFieldMarker({
+  field,
+  isEditing,
+  isActive,
+  onFocus,
+  onBlur,
+  onChange,
+  onRemove,
+}: TextFieldMarkerProps) {
+  const style: CSSProperties = {
+    top: `${field.y}%`,
+    left: `${field.x}%`,
+  };
+
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isEditing || !isActive) return;
+    const element = contentRef.current;
+    if (!element) return;
+
+    element.focus();
+
+    const selection = window.getSelection();
+    if (!selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, [isEditing, isActive, field.id]);
+
+  const handleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (isEditing) {
+      onFocus();
+    }
+  };
+
+  const handleInput = (event: React.FormEvent<HTMLDivElement>) => {
+    const value = (event.target as HTMLDivElement).innerText;
+    onChange(value);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isEditing) return;
+
+    if ((event.key === "Backspace" || event.key === "Delete") && !field.text) {
+      event.preventDefault();
+      onRemove();
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      contentRef.current?.blur();
+    }
+  };
+
+  const handleBlur = () => {
+    if (isEditing) {
+      if (!field.text.trim()) {
+        onRemove();
+        return;
+      }
+      onBlur();
+    }
+  };
+
+  const showPlaceholder = isEditing && !field.text && isActive;
+
+  return (
+    <div
+      className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2"
+      style={style}
+    >
+      <div className="pointer-events-auto relative">
+        <div
+          ref={contentRef}
+          className={cn(
+            "min-w-[80px] whitespace-pre-wrap text-xs text-slate-800 outline-none",
+            isEditing
+              ? "cursor-text border-b border-dashed border-primary/60 px-1"
+              : "cursor-default px-1",
+            isActive && isEditing ? "bg-primary/10" : "bg-transparent"
+          )}
+          contentEditable={isEditing}
+          suppressContentEditableWarning
+          spellCheck={false}
+          tabIndex={isEditing ? 0 : -1}
+          onClick={handleClick}
+          onInput={handleInput}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+        >
+          {field.text || ""}
+        </div>
+
+        {showPlaceholder ? (
+          <span className="pointer-events-none absolute left-1 top-1 text-[10px] text-muted-foreground">
+            Clique para digitar
+          </span>
+        ) : null}
+
+        {isEditing && isActive ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemove();
+            }}
+            className="absolute -right-3 -top-3 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[8px] font-bold text-white shadow"
+            title="Remover campo"
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function createFieldId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `field-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 

@@ -141,30 +141,3 @@
   margin-top: 0.25rem;
   margin-bottom: 0.25rem;
 }
-
-.ProseMirror [style*="page-break-before"],
-.ProseMirror [style*="page-break-after"],
-.ProseMirror [style*="page-break-inside"],
-.ProseMirror .page-break,
-.ProseMirror .pagebreak,
-.ProseMirror .page-break-before,
-.ProseMirror .page-break-after {
-  break-before: auto !important;
-  break-after: auto !important;
-  break-inside: auto !important;
-  page-break-before: auto !important;
-  page-break-after: auto !important;
-  page-break-inside: auto !important;
-}
-
-.ProseMirror .page-break,
-.ProseMirror .pagebreak,
-.ProseMirror .page-break-before,
-.ProseMirror .page-break-after {
-  display: none !important;
-  height: 0 !important;
-}
-
-.ProseMirror table {
-  width: 100% !important;
-}

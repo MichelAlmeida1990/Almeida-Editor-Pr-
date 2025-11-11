@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { FileDigitIcon, FileTextIcon, SparklesIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import WordEditor from "./(editor)/word/page";
 import PdfEditor from "./(editor)/pdf/page";
 import { Toaster } from "sonner";
+import { useEffect, useState } from "react";
 
 const highlights = [
   {
@@ -35,6 +38,31 @@ const highlights = [
 ];
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<"word" | "pdf">("word");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const applyHash = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (hash === "word" || hash === "pdf") {
+        setActiveTab(hash);
+      }
+    };
+
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
+  const handleTabChange = (value: string) => {
+    const tab = value === "pdf" ? "pdf" : "word";
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      window.location.hash = tab;
+    }
+  };
+
   return (
     <>
       <div className="min-h-screen w-full text-foreground">
@@ -80,7 +108,7 @@ export default function Home() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
-              <Tabs defaultValue="word" className="w-full">
+              <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                 <TabsList className="bg-black/30 p-1">
                   <TabsTrigger
                     value="word"

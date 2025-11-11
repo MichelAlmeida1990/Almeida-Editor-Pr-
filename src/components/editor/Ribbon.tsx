@@ -20,6 +20,7 @@ import {
   LinkIcon,
   List,
   ListOrdered,
+  Palette,
   Pilcrow,
   Quote,
   Redo,
@@ -32,10 +33,46 @@ import {
 
 import { cn } from "@/lib/utils";
 
+export type LayoutMargins = "narrow" | "normal" | "wide";
+export type LayoutOrientation = "portrait" | "landscape";
+export type LayoutPageSize = "a4" | "letter";
+
+export type LayoutState = {
+  margins: LayoutMargins;
+  orientation: LayoutOrientation;
+  size: LayoutPageSize;
+  columns: number;
+  hyphenation: boolean;
+};
+
+export type LayoutController = {
+  state: LayoutState;
+  setMargins: (value: LayoutMargins) => void;
+  setOrientation: (value: LayoutOrientation) => void;
+  setPageSize: (value: LayoutPageSize) => void;
+  setColumns: (value: number) => void;
+  setHyphenation: (value: boolean) => void;
+};
+
+export type ReferenceController = {
+  insertTableOfContents: () => void;
+  insertFootnote: () => void;
+  insertEndnote: () => void;
+  insertCitation: () => void;
+  insertBibliography: () => void;
+  insertFigureCaption: () => void;
+  insertTableCaption: () => void;
+  updateFields: () => void;
+};
+
+const DEFAULT_COLOR = "#111827";
+
 type ExportFormat = "html" | "markdown" | "pdf";
 
 type RibbonProps = {
   editor: Editor;
+  layout?: LayoutController;
+  references?: ReferenceController;
   onExport?: (format: ExportFormat) => Promise<void> | void;
 };
 
@@ -48,7 +85,7 @@ const tabs = [
   { id: "exibir", label: "Exibir" },
 ];
 
-export function Ribbon({ editor, onExport }: RibbonProps) {
+export function Ribbon({ editor, layout, references, onExport }: RibbonProps) {
   const [activeTab, setActiveTab] = useState<string>("inicio");
   const [activeState, setActiveState] = useState({
     bold: false,
@@ -66,11 +103,17 @@ export function Ribbon({ editor, onExport }: RibbonProps) {
     table: false,
   });
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [currentColor, setCurrentColor] = useState(DEFAULT_COLOR);
 
   useEffect(() => {
     if (!editor) return;
 
-    const updateState = () =>
+    const updateState = () => {
+      const colorAttr = editor.getAttributes("textStyle")?.color as
+        | string
+        | undefined;
+      setCurrentColor(normalizeColor(colorAttr));
+
       setActiveState({
         bold: editor.isActive("bold"),
         italic: editor.isActive("italic"),
@@ -86,6 +129,7 @@ export function Ribbon({ editor, onExport }: RibbonProps) {
         link: editor.isActive("link"),
         table: editor.isActive("table"),
       });
+    };
 
     updateState();
 
@@ -201,6 +245,19 @@ export function Ribbon({ editor, onExport }: RibbonProps) {
                 tooltip="Rasurar texto"
                 onClick={() => focusChain().toggleStrike().run()}
               />
+              <RibbonColorPicker
+                icon={Palette}
+                label="Cor do texto"
+                color={currentColor}
+                onChange={(value) => {
+                  setCurrentColor(value);
+                  focusChain().setColor(value).run();
+                }}
+                onClear={() => {
+                  setCurrentColor(DEFAULT_COLOR);
+                  focusChain().unsetColor().run();
+                }}
+              />
             </RibbonGroup>
 
             <RibbonGroup title="Parágrafo">
@@ -289,11 +346,10 @@ export function Ribbon({ editor, onExport }: RibbonProps) {
                 label="Imagem"
                 tooltip="Inserir imagem por URL"
                 onClick={() => {
-                  const url = window.prompt("URL da imagem");
-                  if (!url) return;
-                  focusChain().setImage({ src: url }).run();
+                  void pickImageFromDevice(editor);
                 }}
               />
+              <RibbonSplitButton />
               <RibbonButton
                 icon={TableIcon}
                 label="Tabela"
@@ -346,55 +402,19 @@ export function Ribbon({ editor, onExport }: RibbonProps) {
         ) : null}
 
         {activeTab === "inserir" ? (
-          <RibbonPlaceholder
-            title="Inserir"
-            items={[
-              "Imagens locais e online, formas e ícones",
-              "Desenho, SmartArt e gráficos (interativos)",
-              "Cabeçalho, rodapé e número de página",
-              "Caixa de texto, WordArt e símbolos",
-              "Equações e objetos incorporados",
-            ]}
-          />
+          <RibbonInserirMenu editor={editor} />
         ) : null}
 
         {activeTab === "layout" ? (
-          <RibbonPlaceholder
-            title="Layout"
-            items={[
-              "Margens predefinidas e personalizadas",
-              "Orientação (Retrato/Paisagem)",
-              "Tamanho do papel (A4, Carta, etc.)",
-              "Colunas, quebras e recuos avançados",
-              "Hifenização automática",
-            ]}
-          />
+          <RibbonLayoutMenu layout={layout} />
         ) : null}
 
         {activeTab === "referencias" ? (
-          <RibbonPlaceholder
-            title="Referências"
-            items={[
-              "Sumário automático baseado em títulos",
-              "Notas de rodapé e notas de fim",
-              "Gerenciamento de citações e bibliografia",
-              "Inserção de legendas e índice de figuras",
-              "Atualização de campos",
-            ]}
-          />
+          <RibbonReferenciasMenu references={references} />
         ) : null}
 
         {activeTab === "revisao" ? (
-          <RibbonPlaceholder
-            title="Revisão"
-            items={[
-              "Correção ortográfica e gramatical com IA (Ollama)",
-              "Controle de alterações e comentários",
-              "Comparação de versões e painel de revisão",
-              "Restrição de edição / bloqueio de documento",
-              "Tradução e contagem de palavras detalhada",
-            ]}
-          />
+          <RibbonRevisaoMenu />
         ) : null}
 
         {activeTab === "exibir" ? (
@@ -490,6 +510,652 @@ function RibbonPlaceholder({ title, items }: PlaceholderSectionProps) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+type RibbonColorPickerProps = {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  color: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
+};
+
+function RibbonColorPicker({
+  icon: Icon,
+  label,
+  color,
+  onChange,
+  onClear,
+}: RibbonColorPickerProps) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border/40 bg-black/35 px-3 py-2 text-xs text-muted-foreground shadow-sm transition hover:border-primary/40 hover:text-primary focus-within:border-primary/50 focus-within:text-primary">
+        <Icon className="h-3.5 w-3.5" />
+        <span>{label}</span>
+        <span
+          className="h-5 w-5 rounded border border-border/50"
+          style={{ backgroundColor: color }}
+          aria-hidden="true"
+        />
+        <input
+          type="color"
+          value={color}
+          onChange={(event) => onChange(event.target.value)}
+          aria-label={label}
+          className="sr-only"
+        />
+      </label>
+      <button
+        type="button"
+        className="rounded-md border border-border/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        onClick={onClear}
+      >
+        Padrão
+      </button>
+    </div>
+  );
+}
+
+function normalizeColor(value?: string): string {
+  if (!value) return DEFAULT_COLOR;
+
+  const hexMatch = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    if (hex.length === 3) {
+      const [r, g, b] = hex.split("");
+      return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+    }
+    return `#${hex.toLowerCase()}`;
+  }
+
+  const rgbMatch = value.match(
+    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i
+  );
+  if (rgbMatch) {
+    const [, r, g, b] = rgbMatch;
+    return `#${toHex(Number(r))}${toHex(Number(g))}${toHex(Number(b))}`;
+  }
+
+  return DEFAULT_COLOR;
+}
+
+function toHex(component: number) {
+  const clamped = Math.max(0, Math.min(255, component));
+  return clamped.toString(16).padStart(2, "0");
+}
+
+function RibbonLayoutMenu({ layout }: { layout?: LayoutController }) {
+  if (!layout) {
+    return (
+      <RibbonPlaceholder
+        title="Layout"
+        items={[
+          "Margens predefinidas e personalizadas",
+          "Orientação (Retrato/Paisagem)",
+          "Tamanho do papel (A4, Carta, etc.)",
+          "Colunas, quebras e recuos avançados",
+          "Hifenização automática",
+        ]}
+      />
+    );
+  }
+
+  const { state } = layout;
+
+  return (
+    <div className="flex flex-wrap gap-6 text-xs text-muted-foreground">
+      <LayoutCard title="Margens">
+        <LayoutOptionButton
+          label="Estreita"
+          description="1,27 cm"
+          active={state.margins === "narrow"}
+          onClick={() => layout.setMargins("narrow")}
+        />
+        <LayoutOptionButton
+          label="Normal"
+          description="2,54 cm"
+          active={state.margins === "normal"}
+          onClick={() => layout.setMargins("normal")}
+        />
+        <LayoutOptionButton
+          label="Larga"
+          description="3,81 cm"
+          active={state.margins === "wide"}
+          onClick={() => layout.setMargins("wide")}
+        />
+      </LayoutCard>
+
+      <LayoutCard title="Orientação">
+        <LayoutOptionButton
+          label="Retrato"
+          description="Vertical"
+          active={state.orientation === "portrait"}
+          onClick={() => layout.setOrientation("portrait")}
+        />
+        <LayoutOptionButton
+          label="Paisagem"
+          description="Horizontal"
+          active={state.orientation === "landscape"}
+          onClick={() => layout.setOrientation("landscape")}
+        />
+      </LayoutCard>
+
+      <LayoutCard title="Tamanho do papel">
+        <LayoutOptionButton
+          label="A4"
+          description="210 × 297 mm"
+          active={state.size === "a4"}
+          onClick={() => layout.setPageSize("a4")}
+        />
+        <LayoutOptionButton
+          label="Carta"
+          description="8,5 × 11 pol."
+          active={state.size === "letter"}
+          onClick={() => layout.setPageSize("letter")}
+        />
+      </LayoutCard>
+
+      <LayoutCard title="Colunas">
+        {[1, 2, 3].map((count) => (
+          <LayoutOptionButton
+            key={count}
+            label={`${count} coluna${count > 1 ? "s" : ""}`}
+            active={state.columns === count}
+            onClick={() => layout.setColumns(count)}
+          />
+        ))}
+      </LayoutCard>
+
+      <LayoutCard title="Hifenização">
+        <LayoutOptionButton
+          label="Ativar hifenização automática"
+          active={state.hyphenation}
+          onClick={() => layout.setHyphenation(!state.hyphenation)}
+        />
+      </LayoutCard>
+    </div>
+  );
+}
+
+type LayoutCardProps = {
+  title: string;
+  children: ReactNode;
+};
+
+function LayoutCard({ title, children }: LayoutCardProps) {
+  return (
+    <div className="flex min-w-[220px] flex-1 flex-col gap-2 rounded-xl border border-border/40 bg-black/30 p-4 shadow-inner shadow-primary/10">
+      <h3 className="text-sm font-semibold text-primary">{title}</h3>
+      <div className="flex flex-col gap-2">{children}</div>
+    </div>
+  );
+}
+
+type LayoutOptionButtonProps = {
+  label: string;
+  description?: string;
+  active?: boolean;
+  onClick: () => void;
+};
+
+function LayoutOptionButton({
+  label,
+  description,
+  active = false,
+  onClick,
+}: LayoutOptionButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-start rounded-md border border-border/40 px-3 py-2 text-left text-xs text-muted-foreground transition hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active && "border-primary/50 bg-primary/15 text-primary"
+      )}
+    >
+      <span className="font-semibold">{label}</span>
+      {description ? (
+        <span className="text-[11px] opacity-80">{description}</span>
+      ) : null}
+    </button>
+  );
+}
+
+function RibbonInserirMenu({ editor }: { editor: Editor }) {
+  return (
+    <div className="flex flex-wrap gap-6 text-xs text-muted-foreground">
+      <InserirCard
+        title="Imagens e ícones"
+        description="Carregue imagens do seu computador ou use URLs, adicione formas e ícones SVG."
+        actions={[
+          {
+            label: "Imagem do dispositivo",
+            onClick: () => void pickImageFromDevice(editor),
+          },
+          {
+            label: "Imagem por URL",
+            onClick: () => insertImageFromUrl(editor),
+          },
+          {
+            label: "Ícone (SVG)",
+            onClick: () => insertSvgPlaceholder(editor),
+          },
+        ]}
+      />
+      <InserirCard
+        title="Formas e gráficos"
+        description="Insira rapidamente caixas, setas, fluxogramas, organogramas ou um espaço reservado para gráficos."
+        actions={[
+          {
+            label: "Inserir forma",
+            onClick: () => insertShapePlaceholder(editor),
+          },
+          {
+            label: "Inserir gráfico (placeholder)",
+            onClick: () => insertChartPlaceholder(editor),
+          },
+        ]}
+      />
+      <InserirCard
+        title="Cabeçalho e rodapé"
+        description="Adicione elementos fixos no topo ou rodapé do documento, com numeração de página opcional."
+        actions={[
+          {
+            label: "Adicionar cabeçalho",
+            onClick: () => insertHeader(editor),
+          },
+          {
+            label: "Adicionar rodapé",
+            onClick: () => insertFooter(editor),
+          },
+          {
+            label: "Número de página",
+            onClick: () => insertPageNumber(editor),
+          },
+        ]}
+      />
+      <InserirCard
+        title="Elementos de texto"
+        description="Expanda o conteúdo com caixas de texto posicionáveis, WordArt e símbolos especiais."
+        actions={[
+          {
+            label: "Caixa de texto",
+            onClick: () => insertTextBox(editor),
+          },
+          {
+            label: "WordArt (placeholder)",
+            onClick: () => insertWordArtPlaceholder(editor),
+          },
+          {
+            label: "Símbolo especial",
+            onClick: () => insertSymbol(editor),
+          },
+        ]}
+      />
+      <InserirCard
+        title="Equações e objetos"
+        description="Crie expressões matemáticas ou insira objetos externos, como PDFs ou planilhas."
+        actions={[
+          {
+            label: "Equação rápida",
+            onClick: () => insertEquationPlaceholder(editor),
+          },
+          {
+            label: "Objeto incorporado",
+            onClick: () => insertEmbeddedObjectPlaceholder(editor),
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+type InserirCardProps = {
+  title: string;
+  description: string;
+  actions: { label: string; onClick: () => void }[];
+};
+
+function InserirCard({ title, description, actions }: InserirCardProps) {
+  return (
+    <div className="flex min-w-[260px] flex-1 flex-col gap-3 rounded-xl border border-border/40 bg-black/30 p-4 shadow-inner shadow-primary/10">
+      <div>
+        <h3 className="text-sm font-semibold text-primary">{title}</h3>
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      <div className="flex flex-col gap-2">
+        {actions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            onClick={action.onClick}
+            className="flex items-center justify-between rounded-md border border-border/40 bg-black/40 px-3 py-2 text-xs font-semibold text-muted-foreground transition hover:border-primary/50 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <span>{action.label}</span>
+            <span aria-hidden="true" className="text-[10px] uppercase">
+              Inserir
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function pickImageFromDevice(editor: Editor) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        editor
+          .chain()
+          .focus()
+          .setImage({ src: result, alt: file.name })
+          .run();
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+function insertImageFromUrl(editor: Editor) {
+  const url = window.prompt("URL da imagem");
+  if (!url) return;
+  editor.chain().focus().setImage({ src: url }).run();
+}
+
+function insertSvgPlaceholder(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent(
+      '<p><svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="120" fill="#e2e8f0" stroke="#64748b" stroke-dasharray="6 4"/><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="12" fill="#475569">Ícone</text></svg></p>'
+    )
+    .run();
+}
+
+function insertShapePlaceholder(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent(
+      '<div style="height:120px; border:2px dashed #38bdf8; border-radius:16px; display:flex; align-items:center; justify-content:center; color:#0ea5e9; font-weight:600;">Arraste para redimensionar a forma</div>'
+    )
+    .run();
+}
+
+function insertChartPlaceholder(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent(
+      '<div style="padding:16px; border:1px solid #94a3b8; border-radius:12px; background:#f8fafc; color:#1e293b;">Gráfico (placeholder). Use um gráfico real quando o módulo estiver pronto.</div>'
+    )
+    .run();
+}
+
+function insertHeader(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .setTextSelection(0)
+    .insertContentAt(0, '<p style="text-align:center; font-size:12px; color:#64748b;">Cabeçalho - clique para editar</p>')
+    .run();
+}
+
+function insertFooter(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent('<p style="text-align:center; font-size:12px; color:#64748b;">Rodapé - clique para editar</p>')
+    .run();
+}
+
+function insertPageNumber(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent('<p style="text-align:right; font-size:12px; color:#64748b;">Página 1 de 1</p>')
+    .run();
+}
+
+function insertTextBox(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent(
+      '<div contenteditable="true" style="min-height:80px; border:1px solid #94a3b8; border-radius:12px; padding:12px; background:#f1f5f9;">Caixa de texto - digite aqui</div>'
+    )
+    .run();
+}
+
+function insertWordArtPlaceholder(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent(
+      '<p style="font-size:32px; font-weight:700; color:#f97316; text-shadow:2px 2px 0 #0f172a;">WordArt</p>'
+    )
+    .run();
+}
+
+function insertSymbol(editor: Editor) {
+  const symbol = window.prompt("Símbolo (ex.: ©, ™, √, ∑)");
+  if (!symbol) return;
+  editor.chain().focus().insertContent(symbol).run();
+}
+
+function insertEquationPlaceholder(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent(
+      '<p style="font-family: \'Times New Roman\', serif; font-style:italic; font-size:18px;">E = mc<sup>2</sup></p>'
+    )
+    .run();
+}
+
+function insertEmbeddedObjectPlaceholder(editor: Editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent(
+      '<div style="border:2px dashed #38bdf8; border-radius:12px; padding:12px; color:#0ea5e9;">Objeto incorporado (PDF, planilha etc.) — disponível em breve.</div>'
+    )
+    .run();
+}
+
+function RibbonSplitButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setOpen((value) => !value)}
+        className="flex h-11 items-center justify-center rounded-lg border border-transparent bg-black/35 px-3 text-xs text-muted-foreground transition hover:border-primary/40 hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        Mais...
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-full z-10 mt-2 min-w-[180px] rounded-lg border border-border/40 bg-black/80 p-2 text-xs text-muted-foreground shadow-lg backdrop-blur">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between rounded-md px-2 py-1 transition hover:bg-primary/20 hover:text-primary"
+            onClick={() => {
+              setOpen(false);
+              window.alert("Placeholder: explorar modelos 3D em breve.");
+            }}
+          >
+            <span>Modelos 3D (em breve)</span>
+            <span aria-hidden="true">↗</span>
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between rounded-md px-2 py-1 transition hover:bg-primary/20 hover:text-primary"
+            onClick={() => {
+              setOpen(false);
+              window.alert("Placeholder: biblioteca de objetos.");
+            }}
+          >
+            <span>Biblioteca de objetos</span>
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RibbonReferenciasMenu({ references }: { references?: ReferenceController }) {
+  if (!references) {
+    return (
+      <RibbonPlaceholder
+        title="Referências"
+        items={[
+          "Inserir tabela de conteúdo",
+          "Inserir nota de rodapé",
+          "Inserir nota de fim de documento",
+          "Inserir citação",
+          "Inserir bibliografia",
+          "Inserir legenda de figura",
+          "Inserir legenda de tabela",
+          "Atualizar campos",
+        ]}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-6 text-xs text-muted-foreground">
+      <InserirCard
+        title="Referências"
+        description="Adicione referências bibliográficas, notas de rodapé e outros elementos de referência."
+        actions={[
+          {
+            label: "Tabela de conteúdo",
+            onClick: () => references.insertTableOfContents(),
+          },
+          {
+            label: "Inserir nota de rodapé",
+            onClick: () => references.insertFootnote(),
+          },
+          {
+            label: "Inserir nota de fim",
+            onClick: () => references.insertEndnote(),
+          },
+          {
+            label: "Inserir citação",
+            onClick: () => references.insertCitation(),
+          },
+          {
+            label: "Gerar bibliografia",
+            onClick: () => references.insertBibliography(),
+          },
+          {
+            label: "Legenda de figura",
+            onClick: () => references.insertFigureCaption(),
+          },
+          {
+            label: "Legenda de tabela",
+            onClick: () => references.insertTableCaption(),
+          },
+          {
+            label: "Atualizar campos",
+            onClick: () => references.updateFields(),
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
+function RibbonRevisaoMenu() {
+  return (
+    <div className="flex flex-wrap gap-6 text-xs text-muted-foreground">
+      <InserirCard
+        title="Correção ortográfica e gramatical"
+        description="Corrija erros de ortografia e gramática com IA (Ollama)."
+        actions={[
+          {
+            label: "Corrigir texto",
+            onClick: () => window.alert("Placeholder: correção ortográfica em breve."),
+          },
+          {
+            label: "Verificar documentos",
+            onClick: () => window.alert("Placeholder: verificação de documentos em breve."),
+          },
+        ]}
+      />
+      <InserirCard
+        title="Controle de alterações"
+        description="Controle e gerencie as alterações feitas no documento."
+        actions={[
+          {
+            label: "Rastrear alterações",
+            onClick: () => window.alert("Placeholder: rastreamento de alterações em breve."),
+          },
+          {
+            label: "Comentar",
+            onClick: () => window.alert("Placeholder: comentários em breve."),
+          },
+        ]}
+      />
+      <InserirCard
+        title="Comparação de versões"
+        description="Compare diferentes versões do documento e identifique diferenças."
+        actions={[
+          {
+            label: "Comparar versões",
+            onClick: () => window.alert("Placeholder: comparação de versões em breve."),
+          },
+          {
+            label: "Painel de revisão",
+            onClick: () => window.alert("Placeholder: painel de revisão em breve."),
+          },
+        ]}
+      />
+      <InserirCard
+        title="Restrição de edição"
+        description="Bloqueie partes do documento para evitar edições não autorizadas."
+        actions={[
+          {
+            label: "Bloquear documento",
+            onClick: () => window.alert("Placeholder: bloqueio de documento em breve."),
+          },
+          {
+            label: "Permitir edição",
+            onClick: () => window.alert("Placeholder: edição permitida em breve."),
+          },
+        ]}
+      />
+      <InserirCard
+        title="Tradução e contagem de palavras"
+        description="Traduza o documento para outros idiomas e obtenha uma contagem detalhada de palavras."
+        actions={[
+          {
+            label: "Traduzir",
+            onClick: () => window.alert("Placeholder: tradução em breve."),
+          },
+          {
+            label: "Contar palavras",
+            onClick: () => window.alert("Placeholder: contagem de palavras em breve."),
+          },
+        ]}
+      />
     </div>
   );
 }
