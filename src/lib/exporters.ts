@@ -117,3 +117,13 @@ function buildHTMLDocument(editor: Editor) {
   </body>
 </html>`;
 }
+
+function convertToMarkdown(editor: Editor) {
+  const text = editor.getText();
+  return text ?? "";
+}
+
+function createFilename(extension: string) {
+  const iso = new Date().toISOString().replace(/[:.]/g, "-");
+  return `almeida-editor-${iso}.${extension}`;
+}
