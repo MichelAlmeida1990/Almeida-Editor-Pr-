@@ -65,6 +65,15 @@ export type ReferenceController = {
   updateFields: () => void;
 };
 
+export type ReviewController = {
+  runSpellcheck: () => void | Promise<void>;
+  toggleTrackChanges: () => void;
+  insertComment: () => void;
+  compareVersions: () => void;
+  restrictEditing: () => void;
+  translateSelection: () => void;
+};
+
 const DEFAULT_COLOR = "#111827";
 
 type ExportFormat = "html" | "markdown" | "pdf";
@@ -73,6 +82,7 @@ type RibbonProps = {
   editor: Editor;
   layout?: LayoutController;
   references?: ReferenceController;
+  review?: ReviewController;
   onExport?: (format: ExportFormat) => Promise<void> | void;
 };
 
@@ -85,7 +95,7 @@ const tabs = [
   { id: "exibir", label: "Exibir" },
 ];
 
-export function Ribbon({ editor, layout, references, onExport }: RibbonProps) {
+export function Ribbon({ editor, layout, references, review, onExport }: RibbonProps) {
   const [activeTab, setActiveTab] = useState<string>("inicio");
   const [activeState, setActiveState] = useState({
     bold: false,
@@ -414,7 +424,7 @@ export function Ribbon({ editor, layout, references, onExport }: RibbonProps) {
         ) : null}
 
         {activeTab === "revisao" ? (
-          <RibbonRevisaoMenu />
+          <RibbonRevisaoMenu review={review} />
         ) : null}
 
         {activeTab === "exibir" ? (
@@ -1083,7 +1093,16 @@ function RibbonReferenciasMenu({ references }: { references?: ReferenceControlle
   );
 }
 
-function RibbonRevisaoMenu() {
+function RibbonRevisaoMenu({ review }: { review?: ReviewController }) {
+  const handle =
+    (fn: (() => void | Promise<void>) | undefined, fallback: string) => () => {
+      if (fn) {
+        void fn();
+        return;
+      }
+      window.alert(fallback);
+    };
+
   return (
     <div className="flex flex-wrap gap-6 text-xs text-muted-foreground">
       <InserirCard
@@ -1092,7 +1111,7 @@ function RibbonRevisaoMenu() {
         actions={[
           {
             label: "Corrigir texto",
-            onClick: () => window.alert("Placeholder: correção ortográfica em breve."),
+            onClick: handle(review?.runSpellcheck, "Correção ortográfica em breve."),
           },
           {
             label: "Verificar documentos",
@@ -1106,11 +1125,11 @@ function RibbonRevisaoMenu() {
         actions={[
           {
             label: "Rastrear alterações",
-            onClick: () => window.alert("Placeholder: rastreamento de alterações em breve."),
+            onClick: handle(review?.toggleTrackChanges, "Rastreamento de alterações em breve."),
           },
           {
             label: "Comentar",
-            onClick: () => window.alert("Placeholder: comentários em breve."),
+            onClick: handle(review?.insertComment, "Comentários em breve."),
           },
         ]}
       />
@@ -1120,7 +1139,7 @@ function RibbonRevisaoMenu() {
         actions={[
           {
             label: "Comparar versões",
-            onClick: () => window.alert("Placeholder: comparação de versões em breve."),
+            onClick: handle(review?.compareVersions, "Comparação de versões em breve."),
           },
           {
             label: "Painel de revisão",
@@ -1134,7 +1153,7 @@ function RibbonRevisaoMenu() {
         actions={[
           {
             label: "Bloquear documento",
-            onClick: () => window.alert("Placeholder: bloqueio de documento em breve."),
+            onClick: handle(review?.restrictEditing, "Bloqueio de documento em breve."),
           },
           {
             label: "Permitir edição",
@@ -1148,7 +1167,7 @@ function RibbonRevisaoMenu() {
         actions={[
           {
             label: "Traduzir",
-            onClick: () => window.alert("Placeholder: tradução em breve."),
+            onClick: handle(review?.translateSelection, "Tradução em breve."),
           },
           {
             label: "Contar palavras",
