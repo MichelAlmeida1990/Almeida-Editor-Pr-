@@ -53,6 +53,9 @@ importers:
       '@tiptap/extension-color':
         specifier: ^3.10.5
         version: 3.10.5(@tiptap/extension-text-style@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5)))
+      '@tiptap/extension-history':
+        specifier: 3.10.5
+        version: 3.10.5(@tiptap/extensions@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))
       '@tiptap/extension-image':
         specifier: ^3.10.5
         version: 3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))
@@ -1304,6 +1307,11 @@ packages:
     resolution: {integrity: sha512-sJBdtoCUcB9xmiAhg+OztrfQi1FpB9DUQO2IpbedYPixextK3cX8ntQ4NJelT7kBsdOrW3jmWccbjzvK0wZ7Eg==}
     peerDependencies:
       '@tiptap/core': ^3.10.5
+
+  '@tiptap/extension-history@3.10.5':
+    resolution: {integrity: sha512-c/tm6pG+dQMjgKahpZaIsw6BhqC+QZiYrCNkl3hWWwK5zJkDRWVxMNPHB+uDFQkQER03k4VeqwjD4YXX9MuVWg==}
+    peerDependencies:
+      '@tiptap/extensions': ^3.10.5
 
   '@tiptap/extension-horizontal-rule@3.10.5':
     resolution: {integrity: sha512-okzBJVm68QMb9mwYM74az5bzHuXV6NSuoSb32dRwt3zx8zVdNUK0z585SxlQGDJ3ksB+1UR5tGlcst6sT05esw==}
@@ -5078,6 +5086,10 @@ snapshots:
   '@tiptap/extension-heading@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))':
     dependencies:
       '@tiptap/core': 3.10.5(@tiptap/pm@3.10.5)
+
+  '@tiptap/extension-history@3.10.5(@tiptap/extensions@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5))':
+    dependencies:
+      '@tiptap/extensions': 3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)
 
   '@tiptap/extension-horizontal-rule@3.10.5(@tiptap/core@3.10.5(@tiptap/pm@3.10.5))(@tiptap/pm@3.10.5)':
     dependencies:
