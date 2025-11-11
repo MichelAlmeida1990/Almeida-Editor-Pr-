@@ -88,16 +88,6 @@ export default function PdfEditor() {
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
 
-  const workerSrc = useMemo(() => {
-    if (typeof window === "undefined") {
-      return PDF_WORKER_SRC;
-    }
-
-    return new URL(PDF_WORKER_SRC, window.location.origin).toString();
-  }, []);
-
-  const documentOptions = useMemo(() => ({ workerSrc }), [workerSrc]);
-
   const onFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -366,7 +356,6 @@ export default function PdfEditor() {
               </header>
               <div className="flex flex-col gap-10">
                 <Document
-                  options={documentOptions}
                   file={file}
                   className={cn("flex flex-col gap-10", documentAlignmentClass)}
                   loading={
