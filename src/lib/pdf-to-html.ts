@@ -1,7 +1,5 @@
 "use client";
 
-import { pdfjs } from "react-pdf";
-
 function dataUriToUint8Array(dataUri: string): Uint8Array {
   const base64 = dataUri.split(",")[1] ?? "";
   const binaryString = typeof atob === "function" ? atob(base64) : Buffer.from(base64, "base64").toString("binary");
@@ -27,6 +25,12 @@ function normalizeWhitespace(text: string) {
 }
 
 export async function extractPdfToHtml(dataUri: string) {
+  if (typeof window === "undefined") {
+    throw new Error("Extração de PDF disponível apenas no ambiente do navegador.");
+  }
+
+  const { pdfjs } = await import("react-pdf");
+
   if (!dataUri.startsWith("data:")) {
     throw new Error("Somente data URLs são suportadas no momento.");
   }
