@@ -10,7 +10,6 @@ import {
 } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import History from "@tiptap/extension-history";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
@@ -116,9 +115,6 @@ export default function WordEditor() {
           underline: false,
           orderedList: false,
           bulletList: false,
-        }),
-        History.configure({
-          depth: 500,
         }),
         Placeholder.configure({ placeholder: "Digite seu texto..." }),
         Underline,
